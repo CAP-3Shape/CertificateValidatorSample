@@ -14,7 +14,7 @@ namespace ClausAppel.CertificateValidatorSample
 
         private void InstanceMain()
         {
-            var collection = GetCertificateCollectionFromResource(X509KeyStorageFlags.EphemeralKeySet);
+            X509Certificate2Collection collection = GetCertificateCollectionFromResource(X509KeyStorageFlags.EphemeralKeySet);
             var leaf = collection[0];
             var parents = new[] { collection[1], collection[2] };
             var chain = CreateChain(parents);
@@ -22,8 +22,7 @@ namespace ClausAppel.CertificateValidatorSample
             if (!valid)
                 throw new Exception("Chain.Build returned false");
 
-            // We expect the root to be untrusted. It is a self-signed certificate. So the UntrustedRoot flag is harmless.
-            var illegalFlags = chain.ChainStatus.Where(f => f.Status != X509ChainStatusFlags.UntrustedRoot).ToList();
+            var illegalFlags = chain.ChainStatus.Where(HasIllegalFlag).ToList();
             if (illegalFlags.Any())
             {
                 var firstIllegalFlag = illegalFlags.First();
@@ -32,6 +31,14 @@ namespace ClausAppel.CertificateValidatorSample
             else
             {
                 Console.WriteLine("Certificate collection is valid!");
+            }
+
+            bool HasIllegalFlag(X509ChainStatus status)
+            {
+                // We expect the root to be untrusted. It is a self-signed certificate. So the UntrustedRoot flag is harmless.
+                // Moreover, we're using one fixed certificate which is bound to expire one day. So NotTimeValid is also expected.
+                return status.Status != X509ChainStatusFlags.NotTimeValid &&
+                       status.Status != X509ChainStatusFlags.UntrustedRoot;
             }
         }
 
@@ -57,7 +64,7 @@ namespace ClausAppel.CertificateValidatorSample
                 ChainPolicy =
                 {
                     RevocationMode = X509RevocationMode.NoCheck,
-                    VerificationFlags = X509VerificationFlags.AllowUnknownCertificateAuthority
+                    VerificationFlags = X509VerificationFlags.AllowUnknownCertificateAuthority | X509VerificationFlags.IgnoreNotTimeValid,
                 }
             };
             foreach (var parent in parents) chain.ChainPolicy.ExtraStore.Add(parent);
